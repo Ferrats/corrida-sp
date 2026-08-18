@@ -9,9 +9,13 @@ const BRAKING = 620;
 const COASTING = 170;
 const GRIP = 8.5;
 const DRIFT_GRIP = 1.7;
+const HUD_RESOLUTION = Math.min(window.devicePixelRatio, 2);
 
 export class RaceScene extends Phaser.Scene {
   private car!: Phaser.Physics.Arcade.Image;
+  private worldLayer!: Phaser.GameObjects.Layer;
+  private hudLayer!: Phaser.GameObjects.Layer;
+  private hudCamera!: Phaser.Cameras.Scene2D.Camera;
   private keys!: Record<'up' | 'down' | 'left' | 'right' | 'drift', Phaser.Input.Keyboard.Key>;
   private speed = 0;
   private velocity = new Phaser.Math.Vector2();
@@ -25,6 +29,10 @@ export class RaceScene extends Phaser.Scene {
   create(): void {
     this.physics.world.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+    this.cameras.main.roundPixels = true;
+
+    this.worldLayer = this.add.layer();
+    this.hudLayer = this.add.layer().setDepth(100);
 
     this.drawTrack();
     this.createCarTexture();
@@ -32,6 +40,7 @@ export class RaceScene extends Phaser.Scene {
     this.car = this.physics.add.image(WORLD_WIDTH / 2, WORLD_HEIGHT - 330, 'car');
     this.car.setDepth(10).setCollideWorldBounds(true);
     (this.car.body as Phaser.Physics.Arcade.Body).setSize(30, 54, true);
+    this.worldLayer.add(this.car);
 
     const keyboard = this.input.keyboard;
     if (!keyboard) throw new Error('Teclado não disponível.');
@@ -44,9 +53,8 @@ export class RaceScene extends Phaser.Scene {
       drift: Phaser.Input.Keyboard.KeyCodes.SPACE,
     }) as typeof this.keys;
 
-    this.cameras.main.startFollow(this.car, true, 0.09, 0.09);
-    this.cameras.main.setZoom(1.05);
     this.createHud();
+    this.createCameras();
   }
 
   update(_time: number, deltaMs: number): void {
@@ -102,6 +110,7 @@ export class RaceScene extends Phaser.Scene {
 
   private drawTrack(): void {
     const graphics = this.add.graphics();
+    this.worldLayer.add(graphics);
     graphics.fillStyle(0x37653d).fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
 
     graphics.fillStyle(0x24282a).fillRoundedRect(250, 180, 1900, 1240, 360);
@@ -123,12 +132,13 @@ export class RaceScene extends Phaser.Scene {
       }
     }
 
-    this.add.text(WORLD_WIDTH / 2, WORLD_HEIGHT / 2, 'CORRIDA SP', {
+    const trackTitle = this.add.text(WORLD_WIDTH / 2, WORLD_HEIGHT / 2, 'CORRIDA SP', {
       color: '#dce8d8',
       fontFamily: 'system-ui, sans-serif',
       fontSize: '76px',
       fontStyle: '900',
     }).setOrigin(0.5).setAlpha(0.28);
+    this.worldLayer.add(trackTitle);
   }
 
   private createCarTexture(): void {
@@ -147,34 +157,56 @@ export class RaceScene extends Phaser.Scene {
       fontFamily: 'system-ui, sans-serif',
       fontSize: '18px',
       fontStyle: '700',
+      resolution: HUD_RESOLUTION,
       backgroundColor: '#101712cc',
       padding: { x: 12, y: 8 },
-    }).setScrollFactor(0).setDepth(100);
+    });
 
     this.speedLabel = this.add.text(24, 72, '0 km/h', {
       color: '#f2c94c',
       fontFamily: 'ui-monospace, monospace',
       fontSize: '30px',
       fontStyle: '700',
-    }).setScrollFactor(0).setDepth(100);
+      resolution: HUD_RESOLUTION,
+    });
 
-    this.add.text(24, 116, 'W acelerar  ·  S frear/ré  ·  A/D esterçar  ·  Espaço drift', {
+    const controls = this.add.text(24, 116, 'W acelerar  ·  S frear/ré  ·  A/D esterçar  ·  Espaço drift', {
       color: '#eef2ed',
       fontFamily: 'system-ui, sans-serif',
       fontSize: '15px',
+      resolution: HUD_RESOLUTION,
       backgroundColor: '#101712b8',
       padding: { x: 10, y: 7 },
-    }).setScrollFactor(0).setDepth(100);
+    });
 
     this.driftLabel = this.add.text(24, 162, 'DRIFT', {
       color: '#101712',
       fontFamily: 'system-ui, sans-serif',
       fontSize: '18px',
       fontStyle: '900',
+      resolution: HUD_RESOLUTION,
       backgroundColor: '#f2c94c',
       padding: { x: 10, y: 5 },
-    }).setScrollFactor(0).setDepth(100).setVisible(false);
+    }).setVisible(false);
 
+    this.hudLayer.add([title, this.speedLabel, controls, this.driftLabel]);
     title.setInteractive({ useHandCursor: false });
   }
+
+  private createCameras(): void {
+    const { width, height } = this.scale;
+
+    this.cameras.main.startFollow(this.car, true, 1, 1);
+    this.cameras.main.ignore(this.hudLayer);
+
+    this.hudCamera = this.cameras.add(0, 0, width, height, false, 'hud');
+    this.hudCamera.setScroll(0, 0).setZoom(1);
+    this.hudCamera.roundPixels = true;
+    this.hudCamera.ignore(this.worldLayer);
+
+    this.scale.on(Phaser.Scale.Events.RESIZE, (gameSize: Phaser.Structs.Size) => {
+      this.hudCamera.setViewport(0, 0, gameSize.width, gameSize.height);
+    });
+  }
 }
+

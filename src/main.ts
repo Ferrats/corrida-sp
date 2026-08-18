@@ -6,6 +6,11 @@ new Phaser.Game({
   type: Phaser.AUTO,
   parent: 'game',
   backgroundColor: '#37653d',
+  render: {
+    antialias: true,
+    roundPixels: true,
+    powerPreference: 'high-performance',
+  },
   scale: {
     mode: Phaser.Scale.RESIZE,
     autoCenter: Phaser.Scale.CENTER_BOTH,
@@ -17,7 +22,9 @@ new Phaser.Game({
     arcade: {
       gravity: { x: 0, y: 0 },
       debug: false,
+      fixedStep: false,
     },
   },
   scene: [RaceScene],
 });
+
