@@ -1,6 +1,8 @@
 # Corrida SP
 
-Protótipo **0.0.1** de um jogo de corrida arcade 2D visto de cima, feito para rodar diretamente no navegador.
+Protótipo **0.1.0** de um jogo de corrida arcade 2D visto de cima, feito para rodar diretamente no navegador.
+
+A versão atual é um Time Trial de três voltas em um circuito técnico inspirado em Interlagos, com checkpoints, cronômetros, limites de pista e consequências para saídas e colisões.
 
 ## Controles
 
@@ -8,6 +10,7 @@ Protótipo **0.0.1** de um jogo de corrida arcade 2D visto de cima, feito para r
 - `S`: frear e engatar a ré
 - `A` / `D`: esterçar
 - `Espaço`: reduzir a aderência e fazer drift
+- `R`: reiniciar o Time Trial
 
 ## Rodar localmente
 
@@ -45,3 +48,4 @@ src/
 ```
 
 Não há backend, React ou assets externos nesta versão. A pista e o carro são desenhados pelo próprio Phaser como placeholders.
+
