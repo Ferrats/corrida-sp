@@ -17,14 +17,5 @@ new Phaser.Game({
     width: 1280,
     height: 720,
   },
-  physics: {
-    default: 'arcade',
-    arcade: {
-      gravity: { x: 0, y: 0 },
-      debug: false,
-      fixedStep: false,
-    },
-  },
   scene: [RaceScene],
 });
-

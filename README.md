@@ -1,6 +1,12 @@
 # Corrida SP
 
-Protótipo **0.0.1** de um jogo de corrida arcade 2D visto de cima, feito para rodar diretamente no navegador.
+Protótipo de corrida arcade 2D visto de cima, com contrarrelógio de três voltas no navegador.
+
+## Como jogar
+
+Clique em **Jogar**, aguarde a contagem regressiva e siga os portais amarelos no sentido horário. Complete quatro portais em ordem e cruze a chegada no sentido correto para registrar uma volta. Depois de três voltas válidas, veja o tempo total e os tempos individuais; o melhor total fica salvo neste navegador quando o armazenamento estiver disponível.
+
+Sair do asfalto reduz a velocidade e invalida a volta atual. Complete o percurso para recomeçar uma volta válida. Tentativas inválidas continuam contando no tempo total. A superfície é determinada pelo centro do carro; esta versão não simula pneus individuais ou muros na pista.
 
 ## Controles
 
@@ -9,7 +15,9 @@ Protótipo **0.0.1** de um jogo de corrida arcade 2D visto de cima, feito para r
 - `A` / `D`: esterçar
 - `Espaço`: reduzir a aderência e fazer drift
 - As setas também aceleram, freiam e esterçam.
-- `Esc`: pausar/continuar. Ao trocar de aba ou janela, o jogo pausa e limpa os controles; clique no aviso ou pressione `Esc` para retomar.
+- `Esc`: pausar/continuar. Ao trocar de aba ou janela, o jogo pausa e limpa as teclas pressionadas, preservando posição, velocidade e relógio.
+- `R`: reposicionar no último portal aceito (invalida a volta, sem apagar tempo ou progresso).
+- **Reiniciar corrida**: disponível na pausa e no resultado; reinicia a contagem, mas preserva o recorde.
 
 O protótipo requer teclado. As instruções se ajustam à largura da janela; controles de toque ainda não estão disponíveis.
 
@@ -45,7 +53,15 @@ src/
   main.ts             configuração do Phaser
   style.css           página e canvas
   scenes/
-    RaceScene.ts      pista, carro, controles, câmera e HUD
+    RaceScene.ts      desenho, câmera, controles e integração com a interface
+  game/
+    race.ts           simulação, superfícies, checkpoints, voltas e recordes
 ```
 
 Não há backend, React ou assets externos nesta versão. A pista e o carro são desenhados pelo próprio Phaser como placeholders.
+
+## Testes
+
+`npm test` testa o modelo real de produção sem simular o Phaser: geometrias, sentido/ordem dos checkpoints, três voltas completas, grama, pausa, reinício, recuperação, recordes e movimento em 30/60/144 fps. Um piloto de teste percorre três voltas apenas com acelerador e direção. Isso valida a simulação, não o desempenho da GPU nem a usabilidade humana.
+
+A simulação usa passos fixos de 120 Hz e posição interpolada na renderização. Quadros longos têm recuperação física limitada a 250 ms para evitar saltos e trabalho acumulado, mas o tempo perdido continua no cronômetro. Não há adversários, multiplayer, controle por toque ou cenário urbano nesta entrega.
