@@ -10,7 +10,7 @@
     <main id="game-shell" data-phase="ready">
       <div id="game" aria-label="Pista de corrida vista de cima"></div>
       <header class="hud">
-        <div class="brand">CORRIDA SP <span>CONTRARRELÓGIO / 0.1</span></div>
+        <div class="brand">CORRIDA SP <span>CIRCUITO SP 01 / CONTRARRELÓGIO</span></div>
         <div class="stats">
           <div><small>VELOCIDADE</small><strong><span id="speed">0</span> <i>km/h</i></strong></div>
           <div><small>VOLTA</small><strong id="lap">1 / 3</strong></div>
@@ -22,14 +22,18 @@
       <section class="panel" id="panel" aria-labelledby="panel-title">
         <span class="eyebrow">UM CARRO. TRÊS VOLTAS. SEU MELHOR TEMPO.</span>
         <h1 id="panel-title">Você contra o relógio.</h1>
-        <p id="panel-copy">Complete 3 voltas válidas. Siga os portais amarelos e mantenha o carro no asfalto. Requer teclado.</p>
+        <p id="panel-copy">Reta longa, sequência em S e retorno fechado. Complete 3 voltas válidas seguindo os portais amarelos. Requer teclado.</p>
         <p class="record">RECORDE NESTE NAVEGADOR <strong id="record">—</strong></p>
         <ol id="results" hidden></ol>
         <div class="panel-actions"><button class="primary" id="start">Jogar</button><button class="primary" id="resume" hidden>Continuar</button><button id="restart" hidden>Reiniciar corrida</button></div>
         <p class="hint">WASD ou setas: dirigir · Espaço: drift<br>Esc: pausa · R: reposicionar (invalida a volta)</p>
       </section>
       <div id="countdown" hidden aria-label="Contagem para largada">3</div>
-      <footer><span id="checkpoint">Próximo: portal 1 / 4</span><span id="feedback">Siga os portais amarelos</span><span class="keyboard-hint">WASD / SETAS · ESPAÇO DRIFT</span></footer>
+      <aside class="track-map" aria-label="Mapa do circuito: branco é o carro, amarelo é o próximo portal">
+        <svg id="track-map" aria-hidden="true"><polyline id="map-path" fill="none" stroke="#899b87" stroke-width="55" stroke-linejoin="round"/><circle id="map-target" r="65" fill="#f2c94c"/><circle id="map-car" r="55" fill="#ffffff" stroke="#101712" stroke-width="20"/></svg>
+        <span>SP 01 · VOCÊ <b>●</b> · PORTAL <i>●</i></span>
+      </aside>
+      <footer><span id="checkpoint">Próximo portal</span><span id="feedback">Siga os portais amarelos</span><span class="keyboard-hint">WASD / SETAS · ESPAÇO DRIFT</span></footer>
       <p id="status" class="sr-only" role="status" aria-live="polite"></p>
       <p id="loading">Carregando o circuito…</p>
       <noscript>Ative o JavaScript para jogar Corrida SP.</noscript>

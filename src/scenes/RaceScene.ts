@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import { Race, WORLD, OUTER, INNER, GATES, formatTime, loadRecord, saveRecord, onRoad } from '../game/race';
+import { Race, WORLD, GATES, formatTime, loadRecord, saveRecord, onRoad } from '../game/race';
+import { CENTERLINE, INNER_EDGE, OUTER_EDGE, SECTIONS, offset, TRACK_NAME } from '../game/track';
 import type { Controls, Phase } from '../game/race';
 
 export class RaceScene extends Phaser.Scene {
@@ -15,6 +16,8 @@ export class RaceScene extends Phaser.Scene {
   private hudAt = 0;
   private abort!: AbortController;
   private ui!: Record<string, HTMLElement>;
+  private mapCar!: SVGCircleElement;
+  private mapTarget!: SVGCircleElement;
 
   constructor() { super('race'); }
   create(): void {
@@ -40,6 +43,11 @@ export class RaceScene extends Phaser.Scene {
     }));
     try { this.record = loadRecord(window.localStorage); } catch { this.record = null; }
     this.ui.record.textContent = this.record === null ? '—' : formatTime(this.record);
+    const map = document.querySelector<SVGSVGElement>('#track-map')!;
+    map.setAttribute('viewBox', `0 0 ${WORLD.width} ${WORLD.height}`);
+    document.querySelector('#map-path')!.setAttribute('points', [...CENTERLINE, CENTERLINE[0]].map(s => `${s.x},${s.y}`).join(' '));
+    this.mapCar = document.querySelector<SVGCircleElement>('#map-car')!;
+    this.mapTarget = document.querySelector<SVGCircleElement>('#map-target')!;
     this.abort = new AbortController();
     const options = { signal: this.abort.signal };
     this.ui.start.addEventListener('click', () => this.start(), options);
@@ -108,7 +116,7 @@ export class RaceScene extends Phaser.Scene {
     this.ui.status.textContent = { ready: 'Pronto para largar', countdown: 'Preparar para a largada', racing: 'Corrida em andamento', paused: 'Corrida pausada', finished: 'Corrida concluída' }[phase];
     if (phase === 'ready') {
       this.ui['panel-title'].textContent = 'Você contra o relógio.';
-      this.ui['panel-copy'].textContent = 'Complete 3 voltas válidas. Siga os portais amarelos na ordem e mantenha o carro no asfalto. Requer teclado.';
+      this.ui['panel-copy'].textContent = `${TRACK_NAME}: reta longa, sequência em S e retorno fechado. Complete 3 voltas válidas seguindo os ${GATES.length - 1} portais. Freie antes do S e do retorno. Requer teclado.`;
     } else if (phase === 'paused') {
       this.ui['panel-title'].textContent = 'Uma pausa no percurso.';
       this.ui['panel-copy'].textContent = 'O relógio e o movimento estão congelados. Continue com Esc ou pelo botão abaixo.';
@@ -136,38 +144,62 @@ export class RaceScene extends Phaser.Scene {
     this.ui.lap.textContent = `${Math.min(r.tracker.laps.length + 1, 3)} / 3`;
     this.ui.clock.textContent = formatTime(r.elapsedMs);
     this.ui['lap-time'].textContent = formatTime(r.phase === 'finished' ? r.tracker.laps[2] : r.elapsedMs - r.tracker.lapStartMs);
-    this.ui.checkpoint.textContent = r.tracker.nextGate === 4 ? 'Próximo: chegada' : `Próximo: portal ${r.tracker.nextGate + 1} / 4`;
-    this.ui.feedback.textContent = !r.tracker.valid ? (onRoad(r) ? 'Volta inválida · complete o percurso para tentar novamente' : 'Grama: velocidade reduzida · volta inválida') : r.drifting ? 'DRIFT' : 'Siga os portais amarelos • sentido horário';
+    this.ui.checkpoint.textContent = r.tracker.nextGate === GATES.length - 1 ? 'Próximo: chegada' : `Portal ${r.tracker.nextGate + 1}/${GATES.length - 1} · ${GATES[r.tracker.nextGate].name}`;
+    this.ui.feedback.textContent = !r.tracker.valid ? (onRoad(r) ? 'Volta inválida · complete o percurso para tentar novamente' : 'Fora da pista: velocidade reduzida · volta inválida') : r.drifting ? 'DRIFT' : 'Siga os portais amarelos • use o mapa para antecipar as curvas';
     this.ui.feedback.classList.toggle('warning', !r.tracker.valid);
     this.ui.countdown.textContent = String(Math.max(1, Math.ceil(r.countdownMs / 1000)));
+    this.mapCar.setAttribute('cx', String(r.x));
+    this.mapCar.setAttribute('cy', String(r.y));
   }
   private drawCheckpoint(): void {
     this.nextGate = this.race.tracker.nextGate;
     const gate = GATES[this.nextGate];
     this.marker.clear().lineStyle(8, 0xf2c94c, 0.85);
-    if (gate.axis === 'x') this.marker.lineBetween(gate.value, gate.min, gate.value, gate.max);
-    else this.marker.lineBetween(gate.min, gate.value, gate.max, gate.value);
+    this.marker.lineBetween(gate.left.x, gate.left.y, gate.right.x, gate.right.y);
+    this.mapTarget.setAttribute('cx', String(gate.center.x));
+    this.mapTarget.setAttribute('cy', String(gate.center.y));
   }
   private drawTrack(): void {
     const g = this.add.graphics();
+    const vectors = (points: { x: number; y: number }[]) => points.map(p => new Phaser.Math.Vector2(p.x, p.y));
     g.fillStyle(0x37653d).fillRect(0, 0, WORLD.width, WORLD.height);
-    g.fillStyle(0x24282a).fillRoundedRect(OUTER.x, OUTER.y, OUTER.width, OUTER.height, OUTER.radius);
-    g.fillStyle(0x37653d).fillRoundedRect(INNER.x, INNER.y, INNER.width, INNER.height, INNER.radius);
-    g.lineStyle(8, 0xe8e3d5).strokeRoundedRect(OUTER.x, OUTER.y, OUTER.width, OUTER.height, OUTER.radius);
-    g.strokeRoundedRect(INNER.x, INNER.y, INNER.width, INNER.height, INNER.radius);
-    g.lineStyle(4, 0xf2c94c, 0.5).strokeRoundedRect(430, 350, 1540, 900, 290);
-    for (let row = 0; row < 16; row++) for (let col = 0; col < 2; col++) {
-      g.fillStyle((row + col) % 2 ? 0x24282a : 0xffffff).fillRect(1190 + col * 10, 1080 + row * 21, 10, 21);
+    g.fillStyle(0x24282a).fillPoints(vectors(OUTER_EDGE), true);
+    g.fillStyle(0x37653d).fillPoints(vectors(INNER_EDGE), true);
+    for (let i = 0; i < CENTERLINE.length; i++) {
+      const a = CENTERLINE[i], b = CENTERLINE[(i + 1) % CENTERLINE.length];
+      if (!SECTIONS[a.section].kerb) continue;
+      // Runoff is outside the road. Red/white curbs stay inside its valid surface.
+      const outside = a.dx * b.dy - a.dy * b.dx > 0 ? -1 : 1;
+      g.fillStyle(0xa48e65).fillPoints(vectors([
+        offset(a, outside * (a.halfWidth + 6)), offset(b, outside * (b.halfWidth + 6)),
+        offset(b, outside * (b.halfWidth + 65)), offset(a, outside * (a.halfWidth + 65)),
+      ]), true);
+      for (const side of [-1, 1]) {
+        g.fillStyle(Math.floor(a.distance / 36) % 2 ? 0xe8e3d5 : 0xcc4545).fillPoints(vectors([
+          offset(a, side * a.halfWidth), offset(b, side * b.halfWidth),
+          offset(b, side * (b.halfWidth - 16)), offset(a, side * (a.halfWidth - 16)),
+        ]), true);
+      }
     }
-    for (const gate of GATES.slice(0, 4)) {
-      const x = gate.axis === 'x' ? gate.value : (gate.min + gate.max) / 2;
-      const y = gate.axis === 'y' ? gate.value : (gate.min + gate.max) / 2;
-      this.add.text(x, y, gate.axis === 'x' ? (gate.direction < 0 ? '←' : '→') : (gate.direction < 0 ? '↑' : '↓'), {
-        fontSize: '64px', color: '#e8e3d5', fontFamily: 'sans-serif',
-      }).setOrigin(0.5).setAlpha(0.45);
+    g.lineStyle(3, 0xe8e3d5).strokePoints(vectors(OUTER_EDGE), true).strokePoints(vectors(INNER_EDGE), true);
+    const finish = GATES.at(-1)!;
+    for (let row = 0; row < 20; row++) for (let col = 0; col < 2; col++) {
+      g.fillStyle((row + col) % 2 ? 0x24282a : 0xffffff).fillRect(finish.center.x - 10 + col * 10, finish.center.y - finish.halfWidth + row * finish.halfWidth / 10, 10, finish.halfWidth / 10);
     }
-    this.add.text(1200, 760, 'CORRIDA SP', { color: '#dce8d8', fontFamily: 'system-ui, sans-serif', fontSize: '76px', fontStyle: 'bold' }).setOrigin(0.5).setAlpha(0.28);
-    this.add.text(1200, 850, 'CIRCUITO TESTE  /  CONTRARRELÓGIO', { color: '#dce8d8', fontFamily: 'monospace', fontSize: '20px' }).setOrigin(0.5).setAlpha(0.55);
+    for (const gate of GATES.slice(0, -1)) {
+      this.add.text(gate.center.x, gate.center.y, '↑', { fontSize: '52px', color: '#e8e3d5', fontFamily: 'sans-serif' })
+        .setOrigin(0.5).setRotation(Math.atan2(gate.tangent.x, -gate.tangent.y)).setAlpha(0.45);
+    }
+    // Braking boards use track-relative placement, before the two technical sections.
+    for (const [section, label] of [[4, 'S'], [7, 'RETORNO']] as const) {
+      const samples = CENTERLINE.filter(s => s.section === section);
+      for (const [fraction, number] of [[0.35, 'PREPARE'], [0.72, 'FREIE']] as const) {
+        const s = samples[Math.floor(samples.length * fraction)], position = offset(s, -s.halfWidth - 64);
+        this.add.text(position.x, position.y, `${number}\n${label}`, { fontFamily: 'system-ui', fontSize: '17px', fontStyle: 'bold', color: '#101712', backgroundColor: '#f2c94c', align: 'center', padding: { x: 7, y: 5 } }).setOrigin(0.5);
+      }
+    }
+    this.add.text(1120, 1160, 'CORRIDA SP', { color: '#dce8d8', fontFamily: 'system-ui, sans-serif', fontSize: '76px', fontStyle: 'bold' }).setOrigin(0.5).setAlpha(0.28);
+    this.add.text(1120, 1250, TRACK_NAME.toUpperCase(), { color: '#dce8d8', fontFamily: 'monospace', fontSize: '24px' }).setOrigin(0.5).setAlpha(0.55);
   }
   private createCarTexture(): void {
     if (this.textures.exists('car')) return;
