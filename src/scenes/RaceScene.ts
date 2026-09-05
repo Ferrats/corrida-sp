@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { Race, WORLD, OUTER, INNER, GATES, formatTime, loadRecord, saveRecord } from '../game/race';
+import { Race, WORLD, OUTER, INNER, GATES, formatTime, loadRecord, saveRecord, onRoad } from '../game/race';
 import type { Controls, Phase } from '../game/race';
 
 export class RaceScene extends Phaser.Scene {
@@ -31,6 +31,8 @@ export class RaceScene extends Phaser.Scene {
     if (!keyboard) throw new Error('Teclado não disponível.');
     this.keys = keyboard.addKeys({ up: 'W', down: 'S', left: 'A', right: 'D', drift: 'SPACE' }) as typeof this.keys;
     this.arrows = keyboard.createCursorKeys();
+    this.game.canvas.tabIndex = 0;
+    this.game.canvas.setAttribute('aria-label', 'Circuito jogável — WASD ou setas para dirigir');
     this.ui = Object.fromEntries(['panel', 'panel-title', 'panel-copy', 'start', 'resume', 'restart', 'pause', 'recover', 'speed', 'lap', 'clock', 'lap-time', 'checkpoint', 'feedback', 'record', 'countdown', 'results', 'status', 'loading'].map(id => {
       const element = document.getElementById(id);
       if (!element) throw new Error(`Interface ausente: ${id}`);
@@ -44,7 +46,7 @@ export class RaceScene extends Phaser.Scene {
     this.ui.restart.addEventListener('click', () => this.start(), options);
     this.ui.resume.addEventListener('click', () => this.resume(), options);
     this.ui.pause.addEventListener('click', () => this.pause(), options);
-    this.ui.recover.addEventListener('click', () => { this.race.recover(); this.clearKeys(); }, options);
+    this.ui.recover.addEventListener('click', () => { this.race.recover(); this.clearKeys(); this.game.canvas.focus(); }, options);
     window.addEventListener('blur', () => this.pause(), options);
     document.addEventListener('visibilitychange', () => { if (document.hidden) this.pause(); }, options);
     window.addEventListener('keydown', event => {
@@ -84,10 +86,11 @@ export class RaceScene extends Phaser.Scene {
     this.clearKeys(); this.race.start(); this.lastNow = performance.now();
     this.nextGate = -1;
     this.syncPanel(); this.updateHud();
+    this.game.canvas.focus();
   }
   private pause(): void { this.race.pause(); this.clearKeys(); this.syncPanel(); }
   private resume(): void {
-    this.clearKeys(); this.race.resume(); this.lastNow = performance.now(); this.syncPanel();
+    this.clearKeys(); this.race.resume(); this.lastNow = performance.now(); this.syncPanel(); this.game.canvas.focus();
   }
   private syncPanel(): void {
     const phase = this.race.phase;
@@ -132,9 +135,9 @@ export class RaceScene extends Phaser.Scene {
     this.ui.speed.textContent = String(Math.round(Math.hypot(r.vx, r.vy) * 0.32));
     this.ui.lap.textContent = `${Math.min(r.tracker.laps.length + 1, 3)} / 3`;
     this.ui.clock.textContent = formatTime(r.elapsedMs);
-    this.ui['lap-time'].textContent = formatTime(r.elapsedMs - r.tracker.lapStartMs);
+    this.ui['lap-time'].textContent = formatTime(r.phase === 'finished' ? r.tracker.laps[2] : r.elapsedMs - r.tracker.lapStartMs);
     this.ui.checkpoint.textContent = r.tracker.nextGate === 4 ? 'Próximo: chegada' : `Próximo: portal ${r.tracker.nextGate + 1} / 4`;
-    this.ui.feedback.textContent = !r.tracker.valid ? 'Volta inválida · complete o percurso para tentar novamente' : r.drifting ? 'DRIFT' : 'Siga os portais amarelos • sentido horário';
+    this.ui.feedback.textContent = !r.tracker.valid ? (onRoad(r) ? 'Volta inválida · complete o percurso para tentar novamente' : 'Grama: velocidade reduzida · volta inválida') : r.drifting ? 'DRIFT' : 'Siga os portais amarelos • sentido horário';
     this.ui.feedback.classList.toggle('warning', !r.tracker.valid);
     this.ui.countdown.textContent = String(Math.max(1, Math.ceil(r.countdownMs / 1000)));
   }

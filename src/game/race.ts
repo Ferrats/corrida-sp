@@ -119,7 +119,7 @@ export class Race {
       const force = input.up ? (this.speed < 0 ? 620 : 430) : -(this.speed > 0 ? 620 : 301);
       // Do not let held throttle counteract the off-road slowdown.
       if (Math.sign(force) !== Math.sign(this.speed) || Math.abs(this.speed) < maxSpeed) {
-        this.speed = clamp(this.speed + force * dt, -Math.min(180, maxSpeed), maxSpeed);
+        this.speed = clamp(this.speed + force * dt, -180, 520);
       }
     } else {
       this.speed = Math.sign(this.speed) * Math.max(0, Math.abs(this.speed) - 170 * dt);
