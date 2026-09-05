@@ -33,6 +33,10 @@
         <svg id="track-map" aria-hidden="true"><polyline id="map-path" fill="none" stroke="#899b87" stroke-width="55" stroke-linejoin="round"/><circle id="map-target" r="65" fill="#f2c94c"/><circle id="map-car" r="55" fill="#ffffff" stroke="#101712" stroke-width="20"/></svg>
         <span>SP 01 · VOCÊ <b>●</b> · PORTAL <i>●</i></span>
       </aside>
+      <aside class="audio-controls" aria-label="Controles de áudio">
+        <button id="sound-toggle" aria-pressed="true">Som ligado</button>
+        <label for="sound-volume">Volume <input id="sound-volume" type="range" min="0" max="100" step="5" value="35" /></label>
+      </aside>
       <footer><span id="checkpoint">Próximo portal</span><span id="feedback">Siga os portais amarelos</span><span class="keyboard-hint">WASD / SETAS · ESPAÇO DRIFT</span></footer>
       <p id="status" class="sr-only" role="status" aria-live="polite"></p>
       <p id="loading">Carregando o circuito…</p>

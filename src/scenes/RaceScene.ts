@@ -1,3 +1,4 @@
+import { CarAudio } from '../game/audio';
 import Phaser from 'phaser';
 import { Race, WORLD, GATES, formatTime, loadRecord, saveRecord, onRoad } from '../game/race';
 import { CENTERLINE, INNER_EDGE, OUTER_EDGE, SECTIONS, offset, TRACK_NAME } from '../game/track';
@@ -18,6 +19,10 @@ export class RaceScene extends Phaser.Scene {
   private ui!: Record<string, HTMLElement>;
   private mapCar!: SVGCircleElement;
   private mapTarget!: SVGCircleElement;
+
+  private carAudio!: CarAudio;
+  private volume!: HTMLInputElement;
+  private soundToggle!: HTMLButtonElement;
 
   constructor() { super('race'); }
   create(): void {
@@ -50,6 +55,23 @@ export class RaceScene extends Phaser.Scene {
     this.mapTarget = document.querySelector<SVGCircleElement>('#map-target')!;
     this.abort = new AbortController();
     const options = { signal: this.abort.signal };
+    let storage: Storage | undefined;
+    try { storage = window.localStorage; } catch { /* Optional preferences. */ }
+    this.carAudio = new CarAudio(storage);
+    this.volume = document.querySelector<HTMLInputElement>('#sound-volume')!;
+    this.soundToggle = document.querySelector<HTMLButtonElement>('#sound-toggle')!;
+    this.syncAudioControls();
+    this.soundToggle.addEventListener('click', () => {
+      this.carAudio.setPreferences({ muted: !this.carAudio.preferences.muted });
+      if (this.race.phase === 'racing' || this.race.phase === 'countdown') this.activateAudio();
+      this.syncAudioControls();
+    }, options);
+    this.volume.addEventListener('input', () => {
+      this.carAudio.setPreferences({ volume: Number(this.volume.value) / 100 });
+      this.syncAudioControls();
+    }, options);
+    this.volume.addEventListener('focus', () => this.clearKeys(), options);
+    this.volume.addEventListener('keydown', e => { if (e.code !== 'Escape') e.stopPropagation(); }, options);
     this.ui.start.addEventListener('click', () => this.start(), options);
     this.ui.restart.addEventListener('click', () => this.start(), options);
     this.ui.resume.addEventListener('click', () => this.resume(), options);
@@ -65,7 +87,7 @@ export class RaceScene extends Phaser.Scene {
       }
       if (event.code === 'KeyR') { this.race.recover(); this.clearKeys(); }
     }, options);
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.abort.abort());
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => { this.abort.abort(); this.carAudio.dispose(); });
     this.lastNow = performance.now();
     this.ui.loading.hidden = true;
     this.syncPanel();
@@ -76,13 +98,16 @@ export class RaceScene extends Phaser.Scene {
     const now = performance.now();
     const dt = now - this.lastNow;
     this.lastNow = now;
-    this.race.advance(dt, {
-      up: this.keys.up.isDown || this.arrows.up.isDown,
-      down: this.keys.down.isDown || this.arrows.down.isDown,
-      left: this.keys.left.isDown || this.arrows.left.isDown,
-      right: this.keys.right.isDown || this.arrows.right.isDown,
-      drift: this.keys.drift.isDown,
-    });
+    const editingVolume = document.activeElement === this.volume;
+    const controls = {
+      up: !editingVolume && (this.keys.up.isDown || this.arrows.up.isDown),
+      down: !editingVolume && (this.keys.down.isDown || this.arrows.down.isDown),
+      left: !editingVolume && (this.keys.left.isDown || this.arrows.left.isDown),
+      right: !editingVolume && (this.keys.right.isDown || this.arrows.right.isDown),
+      drift: !editingVolume && this.keys.drift.isDown,
+    };
+    this.race.advance(dt, controls);
+    this.carAudio.update({ phase: this.race.phase, speed: this.race.speed, vx: this.race.vx, vy: this.race.vy, angle: this.race.angle, drifting: this.race.drifting, road: onRoad(this.race), up: controls.up, down: controls.down });
     const position = this.race.renderPosition;
     this.car.setPosition(position.x, position.y).setRotation(this.race.angle);
     if (this.race.tracker.nextGate !== this.nextGate) this.drawCheckpoint();
@@ -90,15 +115,27 @@ export class RaceScene extends Phaser.Scene {
     if (now >= this.hudAt) { this.updateHud(); this.hudAt = now + 50; }
   }
   private clearKeys(): void { this.input.keyboard?.resetKeys(); }
+  private activateAudio(): void { void this.carAudio.activate().then(() => this.syncAudioControls()); }
+  private syncAudioControls(): void {
+    const { muted, volume } = this.carAudio.preferences;
+    this.soundToggle.textContent = this.carAudio.unavailable ? 'Som indisponível' : muted ? 'Som desligado' : 'Som ligado';
+    this.soundToggle.setAttribute('aria-pressed', String(!muted));
+    this.soundToggle.disabled = this.carAudio.unavailable;
+    this.volume.disabled = this.carAudio.unavailable;
+    this.volume.value = String(Math.round(volume * 100));
+    this.volume.setAttribute('aria-valuetext', `${Math.round(volume * 100)}%`);
+  }
   private start(): void {
     this.clearKeys(); this.race.start(); this.lastNow = performance.now();
+    this.activateAudio();
     this.nextGate = -1;
     this.syncPanel(); this.updateHud();
     this.game.canvas.focus();
   }
-  private pause(): void { this.race.pause(); this.clearKeys(); this.syncPanel(); }
+  private pause(): void { this.race.pause(); this.carAudio.silence(); this.clearKeys(); this.syncPanel(); }
   private resume(): void {
     this.clearKeys(); this.race.resume(); this.lastNow = performance.now(); this.syncPanel(); this.game.canvas.focus();
+    this.activateAudio();
   }
   private syncPanel(): void {
     const phase = this.race.phase;

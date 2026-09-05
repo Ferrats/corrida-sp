@@ -39,6 +39,13 @@ footer { bottom: 0; left: 0; right: 0; padding: 12px 24px; background: #101712ed
 .track-map svg { display: block; width: 100%; aspect-ratio: 3400 / 2350; }
 .track-map span { display: block; text-align: center; color: #bdc8ba; font-size: 9px; letter-spacing: .04em; }
 .track-map b { color: #fff; } .track-map i { color: #f2c94c; font-style: normal; }
+.audio-controls { position: absolute; z-index: 2; bottom: 58px; left: 20px; display: flex; align-items: center; gap: 12px; background: #101712ed; padding: 8px; border-radius: 6px; }
+.audio-controls button { font-size: 12px; padding: 9px; min-width: 104px; }
+.audio-controls label { font-size: 11px; display: flex; flex-direction: column; gap: 5px; }
+.audio-controls input { width: 95px; accent-color: #f2c94c; }
+.audio-controls input:focus-visible { outline: 2px solid #f2c94c; outline-offset: 3px; }
+@media (max-width: 850px) { .audio-controls { bottom: 85px; left: 12px; } }
+@media (max-width: 480px) { .audio-controls { gap: 6px; padding: 5px; left: 8px; } .audio-controls input { width: 60px; } .audio-controls button { min-width: 0; font-size: 11px; } }
 @media (max-width: 850px) {
   .hud { top: 12px; left: 12px; }
   .race-actions { top: 12px; right: 12px; flex-direction: column; }

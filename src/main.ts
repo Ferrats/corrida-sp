@@ -5,6 +5,7 @@ import { RaceScene } from './scenes/RaceScene';
 new Phaser.Game({
   type: Phaser.AUTO,
   parent: 'game',
+  audio: { noAudio: true }, // CarAudio owns the gesture-unlocked context.
   backgroundColor: '#37653d',
   render: {
     antialias: true,
