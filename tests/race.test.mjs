@@ -4,26 +4,19 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 // Test the actual browser-independent production model, without a Phaser mock.
-const source = readFileSync(new URL('../src/game/race.ts', import.meta.url), 'utf8');
-const code = ts.transpile(source, { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext });
-const { Race, LapTracker, START, GATES, IDLE, onRoad, crossedGate, formatTime, loadRecord, saveRecord } = await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
+const toURL = source => `data:text/javascript;base64,${Buffer.from(ts.transpile(source, { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext })).toString('base64')}`;
+const trackURL = toURL(readFileSync(new URL('../src/game/track.ts', import.meta.url), 'utf8'));
+const track = await import(trackURL);
+const source = readFileSync(new URL('../src/game/race.ts', import.meta.url), 'utf8').replaceAll("'./track'", JSON.stringify(trackURL));
+const { Race, LapTracker, START, GATES, IDLE, onRoad, crossedGate, formatTime, loadRecord, saveRecord, RECORD_KEY } = await import(toURL(source));
+const { CENTERLINE, INNER_EDGE, OUTER_EDGE, TRACK_ID, offset } = track;
 const throttle = { ...IDLE, up: true };
 function racing() { const r = new Race(); r.start(); r.advance(3000, IDLE); return r; }
-function path() {
-  const points = [{ x: 1160, y: 1250 }];
-  const line = (x, y) => {
-    const a = points.at(-1), n = Math.ceil(Math.hypot(x - a.x, y - a.y) / 10);
-    for (let i = 1; i <= n; i++) points.push({ x: a.x + (x - a.x) * i / n, y: a.y + (y - a.y) * i / n });
-  };
-  const arc = (cx, cy, from, to) => {
-    for (let i = 1; i <= 50; i++) { const t = from + (to - from) * i / 50; points.push({ x: cx + 290 * Math.cos(t), y: cy + 290 * Math.sin(t) }); }
-  };
-  line(720, 1250); arc(720, 960, Math.PI / 2, Math.PI);
-  line(430, 640); arc(720, 640, Math.PI, 1.5 * Math.PI);
-  line(1680, 350); arc(1680, 640, 1.5 * Math.PI, 2 * Math.PI);
-  line(1970, 960); arc(1680, 960, 0, Math.PI / 2);
-  line(1160, 1250);
-  return points;
+function path() { return [...CENTERLINE, CENTERLINE[0]]; }
+function gateCross(gate, lateral = 0) {
+  const x = gate.center.x - gate.tangent.y * lateral;
+  const y = gate.center.y + gate.tangent.x * lateral;
+  return [{ x: x - gate.tangent.x * 10, y: y - gate.tangent.y * 10 }, { x: x + gate.tangent.x * 10, y: y + gate.tangent.y * 10 }];
 }
 function completeLap(tracker, startTime = 0) {
   const points = path();
@@ -35,21 +28,55 @@ test('spawn and the entire centerline lie on asphalt', () => {
   for (const p of path()) assert.equal(onRoad(p), true, JSON.stringify(p));
   assert.equal(onRoad({ x: 1200, y: 800 }), false);
   assert.equal(onRoad({ x: 250, y: 180 }), false);
-  assert.equal(onRoad({ x: 2300, y: 800 }), false);
+  assert.equal(onRoad({ x: 3200, y: 2200 }), false);
 });
 test('all checkpoint recovery locations are on asphalt', () => {
   for (const g of GATES) assert.equal(onRoad(g.spawn), true);
 });
+test('track boundaries have no self intersections or crossing edges', () => {
+  const cross = (a, b, c) => (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+  const intersects = (a, b, c, d) => cross(a, b, c) * cross(a, b, d) < -1e-6 && cross(c, d, a) * cross(c, d, b) < -1e-6;
+  for (const polygon of [INNER_EDGE, OUTER_EDGE]) {
+    for (let i = 0; i < polygon.length; i++) for (let j = i + 2; j < polygon.length; j++) {
+      if (i === 0 && j === polygon.length - 1) continue;
+      assert.equal(intersects(polygon[i], polygon[(i + 1) % polygon.length], polygon[j], polygon[(j + 1) % polygon.length]), false);
+    }
+  }
+  for (let i = 0; i < INNER_EDGE.length; i++) for (let j = 0; j < OUTER_EDGE.length; j++) {
+    assert.equal(intersects(INNER_EDGE[i], INNER_EDGE[(i + 1) % INNER_EDGE.length], OUTER_EDGE[j], OUTER_EDGE[(j + 1) % OUTER_EDGE.length]), false);
+  }
+});
+test('road width and runoff classification agree along the whole circuit', () => {
+  for (let i = 0; i < CENTERLINE.length; i += 5) {
+    const sample = CENTERLINE[i];
+    for (const side of [-1, 1]) {
+      assert.equal(onRoad(offset(sample, side * sample.halfWidth * 0.9)), true, `road ${i}`);
+      assert.equal(onRoad(offset(sample, side * (sample.halfWidth + 25))), false, `runoff ${i}`);
+    }
+  }
+});
+test('each portal accepts a forward crossing and rejects a reverse crossing', () => {
+  for (const gate of GATES) {
+    const [a, b] = gateCross(gate);
+    assert.equal(crossedGate(a, b, gate), true);
+    assert.equal(crossedGate(b, a, gate), false);
+  }
+});
+test('new track records cannot overwrite or load the old oval record', () => {
+  assert.ok(RECORD_KEY.includes(TRACK_ID));
+  assert.notEqual(RECORD_KEY, 'corrida-sp:oval-v1:three-laps');
+  assert.equal(loadRecord({ getItem: key => key === 'corrida-sp:oval-v1:three-laps' ? '1234' : null }), null);
+});
 test('gates enforce direction, range, and crossing rather than overlap', () => {
-  const g = GATES[0], a = { x: 810, y: 1250 }, b = { x: 790, y: 1250 };
+  const g = GATES[3], [a, b] = gateCross(g);
   assert.equal(crossedGate(a, b, g), true);
   assert.equal(crossedGate(b, a, g), false);
   assert.equal(crossedGate(a, a, g), false);
-  assert.equal(crossedGate({ x: 810, y: 900 }, { x: 790, y: 900 }, g), false);
+  assert.equal(crossedGate(...gateCross(g, g.halfWidth + 30), g), false);
 });
 test('finish without checkpoints cannot award a lap', () => {
   const t = new LapTracker();
-  t.update({ x: 1210, y: 1250 }, { x: 1190, y: 1250 }, 1000);
+  t.update(...gateCross(GATES.at(-1)), 1000);
   assert.equal(t.laps.length, 0); assert.equal(t.nextGate, 0);
 });
 test('three ordered full laps finish, and later crossings do not add laps', () => {
@@ -128,13 +155,15 @@ test('record storage rejects invalid values and gracefully handles blocked stora
 test('time formatting includes minutes and milliseconds', () => {
   assert.equal(formatTime(61005), '1:01.005'); assert.equal(formatTime(0), '0:00.000');
 });
-test('production physics can drive three clean laps using steering and throttle only', () => {
+test('production physics can drive three clean laps with throttle, steering and braking', () => {
   const r = racing(); const points = path(); let target = 1;
   for (let frame = 0; frame < 180 * 60 && r.phase === 'racing'; frame++) {
     while (Math.hypot(points[target].x - r.x, points[target].y - r.y) < 85) target = (target + 1) % points.length;
     const desired = Math.atan2(points[target].x - r.x, -(points[target].y - r.y));
     const error = Math.atan2(Math.sin(desired - r.angle), Math.cos(desired - r.angle));
-    r.advance(1000 / 60, { ...IDLE, up: r.speed < 290, left: error < -0.025, right: error > 0.025 });
+    const section = points[(target + 14) % points.length].section;
+    const desiredSpeed = [500, 320, 400, 300, 340, 210, 210, 300, 230, 280, 220, 260, 380, 290, 500][section];
+    r.advance(1000 / 60, { ...IDLE, up: r.speed < desiredSpeed, down: r.speed > desiredSpeed + 12, left: error < -0.025, right: error > 0.025 });
   }
   assert.equal(r.phase, 'finished', `laps=${r.tracker.laps.length}, gate=${r.tracker.nextGate}, valid=${r.tracker.valid}`);
   assert.equal(r.tracker.laps.length, 3);

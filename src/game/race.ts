@@ -1,34 +1,6 @@
-export const WORLD = { width: 2400, height: 1600 };
-export const OUTER = { x: 250, y: 180, width: 1900, height: 1240, radius: 360 };
-export const INNER = { x: 610, y: 520, width: 1180, height: 560, radius: 230 };
-export type Point = { x: number; y: number };
-type RoundedRect = typeof OUTER;
-export function inRoundedRect(p: Point, r: RoundedRect): boolean {
-  if (p.x < r.x || p.y < r.y || p.x > r.x + r.width || p.y > r.y + r.height) return false;
-  const cx = Math.max(r.x + r.radius, Math.min(r.x + r.width - r.radius, p.x));
-  const cy = Math.max(r.y + r.radius, Math.min(r.y + r.height - r.radius, p.y));
-  return (p.x - cx) ** 2 + (p.y - cy) ** 2 <= r.radius ** 2;
-}
-export const onRoad = (p: Point): boolean => inRoundedRect(p, OUTER) && !inRoundedRect(p, INNER);
-export type Gate = { axis: 'x' | 'y'; value: number; min: number; max: number; direction: 1 | -1; spawn: Point & { angle: number } };
-// Clockwise from the bottom straight, with directional segment crossings.
-export const GATES: Gate[] = [
-  { axis: 'x', value: 800, min: 1080, max: 1420, direction: -1, spawn: { x: 760, y: 1250, angle: -Math.PI / 2 } },
-  { axis: 'y', value: 800, min: 250, max: 610, direction: -1, spawn: { x: 430, y: 760, angle: 0 } },
-  { axis: 'x', value: 1200, min: 180, max: 520, direction: 1, spawn: { x: 1240, y: 350, angle: Math.PI / 2 } },
-  { axis: 'y', value: 800, min: 1790, max: 2150, direction: 1, spawn: { x: 1970, y: 840, angle: Math.PI } },
-  { axis: 'x', value: 1200, min: 1080, max: 1420, direction: -1, spawn: { x: 1160, y: 1250, angle: -Math.PI / 2 } },
-];
-export const START = { x: 1200, y: 1250, angle: -Math.PI / 2 };
-export function crossedGate(a: Point, b: Point, g: Gate): boolean {
-  const before = (a[g.axis] - g.value) * g.direction;
-  const after = (b[g.axis] - g.value) * g.direction;
-  if (before >= 0 || after < 0) return false;
-  const t = (g.value - a[g.axis]) / (b[g.axis] - a[g.axis]);
-  const other = g.axis === 'x' ? 'y' : 'x';
-  const cross = a[other] + (b[other] - a[other]) * t;
-  return cross >= g.min && cross <= g.max;
-}
+import { WORLD, START, GATES, onRoad, crossedGate, TRACK_ID } from './track';
+import type { Point } from './track';
+export { WORLD, START, GATES, onRoad, crossedGate } from './track';
 
 export class LapTracker {
   nextGate = 0;
@@ -153,7 +125,7 @@ export function formatTime(ms: number): string {
   const value = Math.max(0, Math.floor(ms));
   return `${Math.floor(value / 60000)}:${String(Math.floor(value / 1000) % 60).padStart(2, '0')}.${String(value % 1000).padStart(3, '0')}`;
 }
-export const RECORD_KEY = 'corrida-sp:oval-v1:three-laps';
+export const RECORD_KEY = `corrida-sp:${TRACK_ID}:three-laps`;
 export function loadRecord(storage: Pick<Storage, 'getItem'>): number | null {
   try {
     const raw = storage.getItem(RECORD_KEY);
