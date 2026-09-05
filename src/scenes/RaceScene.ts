@@ -21,6 +21,11 @@ export class RaceScene extends Phaser.Scene {
   private velocity = new Phaser.Math.Vector2();
   private speedLabel!: Phaser.GameObjects.Text;
   private driftLabel!: Phaser.GameObjects.Text;
+  private controlsLabel!: Phaser.GameObjects.Text;
+  private pauseLabel!: Phaser.GameObjects.Text;
+  private paused = false;
+  private arrows!: Phaser.Types.Input.Keyboard.CursorKeys;
+  private targetVelocity = new Phaser.Math.Vector2();
 
   constructor() {
     super('race');
@@ -29,7 +34,10 @@ export class RaceScene extends Phaser.Scene {
   create(): void {
     this.physics.world.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
     this.cameras.main.setBounds(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
-    this.cameras.main.roundPixels = true;
+    this.cameras.main.roundPixels = false;
+    this.speed = 0;
+    this.velocity.set(0, 0);
+    this.paused = false;
 
     this.worldLayer = this.add.layer();
     this.hudLayer = this.add.layer().setDepth(100);
@@ -52,13 +60,34 @@ export class RaceScene extends Phaser.Scene {
       right: Phaser.Input.Keyboard.KeyCodes.D,
       drift: Phaser.Input.Keyboard.KeyCodes.SPACE,
     }) as typeof this.keys;
+    this.arrows = keyboard.createCursorKeys();
+    keyboard.on('keydown-ESC', this.togglePause, this);
 
     this.createHud();
     this.createCameras();
+    this.game.events.on(Phaser.Core.Events.BLUR, this.pauseGame, this);
+    this.game.events.on(Phaser.Core.Events.HIDDEN, this.pauseGame, this);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.game.events.off(Phaser.Core.Events.BLUR, this.pauseGame, this);
+      this.game.events.off(Phaser.Core.Events.HIDDEN, this.pauseGame, this);
+      this.scale.off(Phaser.Scale.Events.RESIZE, this.resizeHud, this);
+      keyboard.off('keydown-ESC', this.togglePause, this);
+    });
   }
 
   update(_time: number, deltaMs: number): void {
-    const dt = Math.min(deltaMs / 1000, 0.05);
+    if (this.paused) return;
+    const dt = Math.min(deltaMs / 1000, 0.1);
+    const body = this.car.body as Phaser.Physics.Arcade.Body;
+    // Arcade resolves the boundary, so discard the matching stored momentum too.
+    if ((body.blocked.left && this.velocity.x < 0) || (body.blocked.right && this.velocity.x > 0)) {
+      this.velocity.x = 0;
+      this.speed = 0;
+    }
+    if ((body.blocked.up && this.velocity.y < 0) || (body.blocked.down && this.velocity.y > 0)) {
+      this.velocity.y = 0;
+      this.speed = 0;
+    }
     const drifting = this.keys.drift.isDown && Math.abs(this.speed) > 90;
 
     this.updateThrottle(dt);
@@ -66,17 +95,19 @@ export class RaceScene extends Phaser.Scene {
     this.updateVelocity(dt, drifting);
 
     this.car.setVelocity(this.velocity.x, this.velocity.y);
-    this.speedLabel.setText(`${Math.round(Math.abs(this.speed) * 0.32)} km/h`);
+    this.speedLabel.setText(`${Math.round(this.velocity.length() * 0.32)} km/h`);
     this.driftLabel.setVisible(drifting);
   }
 
   private updateThrottle(dt: number): void {
-    if (this.keys.up.isDown) {
+    const up = this.keys.up.isDown || this.arrows.up.isDown;
+    const down = this.keys.down.isDown || this.arrows.down.isDown;
+    if (up && !down) {
       this.speed = Phaser.Math.Clamp(this.speed + ACCELERATION * dt, -MAX_REVERSE_SPEED, MAX_FORWARD_SPEED);
       return;
     }
 
-    if (this.keys.down.isDown) {
+    if (down && !up) {
       const force = this.speed > 0 ? BRAKING : ACCELERATION * 0.7;
       this.speed = Phaser.Math.Clamp(this.speed - force * dt, -MAX_REVERSE_SPEED, MAX_FORWARD_SPEED);
       return;
@@ -89,7 +120,7 @@ export class RaceScene extends Phaser.Scene {
   private updateSteering(dt: number, drifting: boolean): void {
     if (Math.abs(this.speed) < 8) return;
 
-    const direction = Number(this.keys.right.isDown) - Number(this.keys.left.isDown);
+    const direction = Number(this.keys.right.isDown || this.arrows.right.isDown) - Number(this.keys.left.isDown || this.arrows.left.isDown);
     const speedRatio = Phaser.Math.Clamp(Math.abs(this.speed) / MAX_FORWARD_SPEED, 0, 1);
     const turnRate = Phaser.Math.Linear(2.4, 1.45, speedRatio) * (drifting ? 1.32 : 1);
     const reverseMultiplier = this.speed >= 0 ? 1 : -1;
@@ -97,14 +128,13 @@ export class RaceScene extends Phaser.Scene {
   }
 
   private updateVelocity(dt: number, drifting: boolean): void {
-    const forward = new Phaser.Math.Vector2(Math.sin(this.car.rotation), -Math.cos(this.car.rotation));
-    const target = forward.scale(this.speed);
+    const target = this.targetVelocity.set(Math.sin(this.car.rotation) * this.speed, -Math.cos(this.car.rotation) * this.speed);
     const grip = drifting ? DRIFT_GRIP : GRIP;
     const blend = 1 - Math.exp(-grip * dt);
     this.velocity.lerp(target, blend);
 
     if (this.speed === 0) {
-      this.velocity.scale(Math.max(0, 1 - COASTING * dt / 100));
+      this.velocity.scale(Math.exp(-COASTING * dt / 100));
     }
   }
 
@@ -142,6 +172,7 @@ export class RaceScene extends Phaser.Scene {
   }
 
   private createCarTexture(): void {
+    if (this.textures.exists('car')) return;
     const car = this.make.graphics({ x: 0, y: 0 });
     car.fillStyle(0xe5484d).fillRoundedRect(5, 2, 34, 62, 8);
     car.fillStyle(0x15191b).fillRoundedRect(9, 17, 26, 23, 5);
@@ -170,7 +201,7 @@ export class RaceScene extends Phaser.Scene {
       resolution: HUD_RESOLUTION,
     });
 
-    const controls = this.add.text(24, 116, 'W acelerar  ·  S frear/ré  ·  A/D esterçar  ·  Espaço drift', {
+    const controls = this.controlsLabel = this.add.text(24, 116, 'W/↑ acelerar · S/↓ frear/ré · A/D ou ←/→ esterçar · Espaço drift · Esc pausar', {
       color: '#eef2ed',
       fontFamily: 'system-ui, sans-serif',
       fontSize: '15px',
@@ -190,13 +221,19 @@ export class RaceScene extends Phaser.Scene {
     }).setVisible(false);
 
     this.hudLayer.add([title, this.speedLabel, controls, this.driftLabel]);
-    title.setInteractive({ useHandCursor: false });
+    this.pauseLabel = this.add.text(0, 0, 'PAUSADO\nClique para continuar\nou pressione Esc', {
+      fontFamily: 'system-ui, sans-serif', fontSize: '22px', color: '#ffffff',
+      backgroundColor: '#101712', align: 'center', padding: { x: 18, y: 18 },
+      resolution: HUD_RESOLUTION,
+    }).setOrigin(0.5).setVisible(false).setInteractive({ useHandCursor: true });
+    this.pauseLabel.on('pointerdown', this.togglePause, this);
+    this.hudLayer.add(this.pauseLabel);
   }
 
   private createCameras(): void {
     const { width, height } = this.scale;
 
-    this.cameras.main.startFollow(this.car, true, 1, 1);
+    this.cameras.main.startFollow(this.car, false, 1, 1);
     this.cameras.main.ignore(this.hudLayer);
 
     this.hudCamera = this.cameras.add(0, 0, width, height, false, 'hud');
@@ -204,9 +241,39 @@ export class RaceScene extends Phaser.Scene {
     this.hudCamera.roundPixels = true;
     this.hudCamera.ignore(this.worldLayer);
 
-    this.scale.on(Phaser.Scale.Events.RESIZE, (gameSize: Phaser.Structs.Size) => {
-      this.hudCamera.setViewport(0, 0, gameSize.width, gameSize.height);
-    });
+    this.scale.on(Phaser.Scale.Events.RESIZE, this.resizeHud, this);
+    this.resizeHud();
+  }
+
+  private resizeHud(): void {
+    const { width, height } = this.scale;
+    this.hudCamera.setViewport(0, 0, width, height);
+    this.controlsLabel.setWordWrapWidth(Math.max(80, width - 68), true);
+    this.driftLabel.setY(this.controlsLabel.y + this.controlsLabel.height + 12);
+    this.pauseLabel.setPosition(width / 2, height / 2);
+  }
+
+  private pauseGame(): void {
+    this.paused = true;
+    this.speed = 0;
+    this.velocity.set(0, 0);
+    this.car.setVelocity(0, 0);
+    this.input.keyboard?.resetKeys();
+    this.physics.world.pause();
+    this.speedLabel.setText('0 km/h');
+    this.driftLabel.setVisible(false);
+    this.pauseLabel.setVisible(true);
+  }
+
+  private togglePause(event?: KeyboardEvent): void {
+    if (event?.repeat) return;
+    if (!this.paused) {
+      this.pauseGame();
+      return;
+    }
+    this.input.keyboard?.resetKeys();
+    this.paused = false;
+    this.pauseLabel.setVisible(false);
+    this.physics.world.resume();
   }
 }
-

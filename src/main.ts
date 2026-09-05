@@ -8,7 +8,7 @@ new Phaser.Game({
   backgroundColor: '#37653d',
   render: {
     antialias: true,
-    roundPixels: true,
+    roundPixels: false,
     powerPreference: 'high-performance',
   },
   scale: {
