@@ -8,6 +8,10 @@ Protótipo **0.0.1** de um jogo de corrida arcade 2D visto de cima, feito para r
 - `S`: frear e engatar a ré
 - `A` / `D`: esterçar
 - `Espaço`: reduzir a aderência e fazer drift
+- As setas também aceleram, freiam e esterçam.
+- `Esc`: pausar/continuar. Ao trocar de aba ou janela, o jogo pausa e limpa os controles; clique no aviso ou pressione `Esc` para retomar.
+
+O protótipo requer teclado. As instruções se ajustam à largura da janela; controles de toque ainda não estão disponíveis.
 
 ## Rodar localmente
 
