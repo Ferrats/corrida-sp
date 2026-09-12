@@ -153,7 +153,7 @@ export class RaceScene extends Phaser.Scene {
     this.ui.status.textContent = { ready: 'Pronto para largar', countdown: 'Preparar para a largada', racing: 'Corrida em andamento', paused: 'Corrida pausada', finished: 'Corrida concluída' }[phase];
     if (phase === 'ready') {
       this.ui['panel-title'].textContent = 'Você contra o relógio.';
-      this.ui['panel-copy'].textContent = `${TRACK_NAME}: reta longa, sequência em S e retorno fechado. Complete 3 voltas válidas seguindo os ${GATES.length - 1} portais. Freie antes do S e do retorno. Requer teclado.`;
+      this.ui['panel-copy'].textContent = `${TRACK_NAME}: reta longa, sequência em S e retorno fechado. Complete 3 voltas seguindo os ${GATES.length - 1} portais em ordem. Sair do asfalto reduz a velocidade, mas a volta continua. Freie antes do S e do retorno. Requer teclado.`;
     } else if (phase === 'paused') {
       this.ui['panel-title'].textContent = 'Uma pausa no percurso.';
       this.ui['panel-copy'].textContent = 'O relógio e o movimento estão congelados. Continue com Esc ou pelo botão abaixo.';
@@ -167,7 +167,7 @@ export class RaceScene extends Phaser.Scene {
         try { saved = saveRecord(window.localStorage, total); } catch { saved = false; }
       }
       this.ui['panel-title'].textContent = improved ? 'Seu novo recorde.' : 'Bandeirada!';
-      this.ui['panel-copy'].textContent = `3 voltas válidas em ${formatTime(total)}.${saved ? ' Mais uma tentativa?' : ' Recorde disponível nesta sessão; o navegador bloqueou o salvamento.'}`;
+      this.ui['panel-copy'].textContent = `3 voltas em ${formatTime(total)}.${saved ? ' Mais uma tentativa?' : ' Recorde disponível nesta sessão; o navegador bloqueou o salvamento.'}`;
       this.ui.results.replaceChildren(...this.race.tracker.laps.map((ms, i) => {
         const item = document.createElement('li'); item.textContent = `Volta ${i + 1} — ${formatTime(ms)}`; return item;
       }));
@@ -182,8 +182,8 @@ export class RaceScene extends Phaser.Scene {
     this.ui.clock.textContent = formatTime(r.elapsedMs);
     this.ui['lap-time'].textContent = formatTime(r.phase === 'finished' ? r.tracker.laps[2] : r.elapsedMs - r.tracker.lapStartMs);
     this.ui.checkpoint.textContent = r.tracker.nextGate === GATES.length - 1 ? 'Próximo: chegada' : `Portal ${r.tracker.nextGate + 1}/${GATES.length - 1} · ${GATES[r.tracker.nextGate].name}`;
-    this.ui.feedback.textContent = !r.tracker.valid ? (onRoad(r) ? 'Volta inválida · complete o percurso para tentar novamente' : 'Fora da pista: velocidade reduzida · volta inválida') : r.drifting ? 'DRIFT' : 'Siga os portais amarelos • use o mapa para antecipar as curvas';
-    this.ui.feedback.classList.toggle('warning', !r.tracker.valid);
+    this.ui.feedback.textContent = !onRoad(r) ? 'Fora do asfalto: velocidade reduzida · siga até o próximo portal' : r.drifting ? 'DRIFT' : 'Siga os portais amarelos • use o mapa para antecipar as curvas';
+    this.ui.feedback.classList.toggle('warning', !onRoad(r));
     this.ui.countdown.textContent = String(Math.max(1, Math.ceil(r.countdownMs / 1000)));
     this.mapCar.setAttribute('cx', String(r.x));
     this.mapCar.setAttribute('cy', String(r.y));
