@@ -14,7 +14,13 @@ As zebras ficam dentro da superfície válida; as áreas de escape ficam fora e 
 
 Sair do asfalto reduz a velocidade e invalida a volta atual. Complete o percurso para recomeçar uma volta válida. Tentativas inválidas continuam contando no tempo total. A superfície é determinada pelo centro do carro; esta versão não simula pneus individuais ou muros na pista.
 
-## Controles
+## Áudio
+
+Sons sintetizados com Web Audio: motor com tom e carga variáveis, ruído de frenagem e pneus que chiam conforme o deslizamento lateral durante o drift. São efeitos arcade, sem gravações externas ou downloads adicionais.
+
+O áudio começa apenas após **Jogar/Continuar**, respeitando o bloqueio de reprodução automática do navegador. Pausa, perda de foco e fim de corrida silenciam os efeitos. Use **Som ligado/desligado** e **Volume**, no canto inferior esquerdo; as preferências são salvas localmente quando possível. O volume inicial é 35%. Se Web Audio não estiver disponível, o jogo continua silencioso.
+
+## Teclado
 
 - `W`: acelerar
 - `S`: frear e engatar a ré
