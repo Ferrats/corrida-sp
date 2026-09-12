@@ -62,9 +62,12 @@ test('each portal accepts a forward crossing and rejects a reverse crossing', ()
     assert.equal(crossedGate(b, a, gate), false);
   }
 });
-test('new track records cannot overwrite or load the old oval record', () => {
+test('street rules keep records separate from the oval and previous circuit rules', () => {
   assert.ok(RECORD_KEY.includes(TRACK_ID));
   assert.notEqual(RECORD_KEY, 'corrida-sp:oval-v1:three-laps');
+  const previousKey = `corrida-sp:${TRACK_ID}:three-laps`;
+  assert.notEqual(RECORD_KEY, previousKey);
+  assert.equal(loadRecord({ getItem: key => key === previousKey ? '1234' : null }), null);
   assert.equal(loadRecord({ getItem: key => key === 'corrida-sp:oval-v1:three-laps' ? '1234' : null }), null);
 });
 test('gates enforce direction, range, and crossing rather than overlap', () => {
@@ -86,13 +89,25 @@ test('three ordered full laps finish, and later crossings do not add laps', () =
   assert.ok(t.laps.every(ms => ms > 0));
   completeLap(t, now); assert.equal(t.laps.length, 3);
 });
-test('grass invalidates the attempt; completing the route rearms a clean lap', () => {
+test('off-road excursions preserve each lap and all elapsed time across three laps', () => {
+  const t = new LapTracker(); let now = 0;
+  for (let lap = 0; lap < 3; lap++) {
+    t.update(START, { x: 1200, y: 800 }, now + 100);
+    assert.equal(t.nextGate, 0);
+    now = completeLap(t, now + 5000);
+    assert.equal(t.laps.length, lap + 1);
+  }
+  assert.equal(t.finished, true);
+  assert.equal(t.laps.reduce((sum, ms) => sum + ms, 0), now);
+});
+test('off-road shortcuts cannot skip a required portal', () => {
   const t = new LapTracker();
-  t.update(START, { x: 1200, y: 800 }, 100);
-  assert.equal(t.valid, false);
-  const now = completeLap(t, 100);
-  assert.equal(t.laps.length, 0); assert.equal(t.valid, true);
-  completeLap(t, now); assert.equal(t.laps.length, 1);
+  t.update(...gateCross(GATES[0]), 100);
+  t.update(GATES[0].spawn, { x: 1200, y: 800 }, 200);
+  t.update(...gateCross(GATES[2]), 300);
+  t.update(...gateCross(GATES.at(-1)), 400);
+  assert.equal(t.nextGate, 1);
+  assert.equal(t.laps.length, 0);
 });
 test('countdown locks motion and pause freezes the countdown', () => {
   const r = new Race(); r.start(); r.advance(1000, throttle);
@@ -123,21 +138,27 @@ test('opposite inputs coast and reverse steering reverses', () => {
 test('grass reduces speed and disables drift', () => {
   const r = racing(); r.x = 1200; r.y = 800; r.speed = 520; r.angle = 0;
   for (let i = 0; i < 30; i++) r.advance(1000 / 60, { ...throttle, drift: true });
-  assert.ok(r.speed <= 151); assert.equal(r.drifting, false); assert.equal(r.tracker.valid, false);
+  assert.ok(r.speed <= 151); assert.equal(r.drifting, false);
 });
 test('world boundaries keep position and clear outward velocity', () => {
   const r = racing(); r.x = 24; r.vx = -300; r.speed = 300;
   r.advance(20, IDLE); assert.equal(r.x, 24); assert.equal(r.vx, 0); assert.equal(r.speed, 0);
 });
-test('recovery keeps time and checkpoint progress but invalidates lap', () => {
+test('recovery keeps time and checkpoint progress and the current lap can finish', () => {
   const r = racing(); r.tracker.nextGate = 2; r.tracker.recovery = GATES[1].spawn; r.elapsedMs = 9000;
   r.recover(); assert.equal(r.x, GATES[1].spawn.x); assert.equal(r.speed, 0);
-  assert.equal(r.tracker.nextGate, 2); assert.equal(r.tracker.valid, false); assert.equal(r.elapsedMs, 9000);
+  assert.equal(r.tracker.nextGate, 2); assert.equal(r.elapsedMs, 9000);
+  const points = path();
+  for (let i = GATES[1].sampleIndex + 5; i < points.length; i++) {
+    r.tracker.update(points[i - 1], points[i], 9000 + i * 20);
+  }
+  assert.equal(r.tracker.laps.length, 1);
+  assert.ok(r.tracker.laps[0] > 9000);
 });
 test('restart resets all session state', () => {
-  const r = racing(); r.advance(200, throttle); r.tracker.valid = false; r.pause(); r.start();
+  const r = racing(); r.advance(200, throttle); r.pause(); r.start();
   assert.equal(r.phase, 'countdown'); assert.equal(r.countdownMs, 3000); assert.equal(r.elapsedMs, 0);
-  assert.equal(r.x, START.x); assert.equal(r.speed, 0); assert.equal(r.tracker.valid, true);
+  assert.equal(r.x, START.x); assert.equal(r.speed, 0);
 });
 test('long frame counts elapsed time but limits physics catch-up', () => {
   const r = racing(); r.advance(5000, throttle);
@@ -165,7 +186,7 @@ test('production physics can drive three clean laps with throttle, steering and 
     const desiredSpeed = [500, 320, 400, 300, 340, 210, 210, 300, 230, 280, 220, 260, 380, 290, 500][section];
     r.advance(1000 / 60, { ...IDLE, up: r.speed < desiredSpeed, down: r.speed > desiredSpeed + 12, left: error < -0.025, right: error > 0.025 });
   }
-  assert.equal(r.phase, 'finished', `laps=${r.tracker.laps.length}, gate=${r.tracker.nextGate}, valid=${r.tracker.valid}`);
+  assert.equal(r.phase, 'finished', `laps=${r.tracker.laps.length}, gate=${r.tracker.nextGate}`);
   assert.equal(r.tracker.laps.length, 3);
   const time = r.elapsedMs; r.advance(5000, throttle); assert.equal(r.elapsedMs, time);
 });

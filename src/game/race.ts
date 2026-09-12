@@ -4,21 +4,19 @@ export { WORLD, START, GATES, onRoad, crossedGate } from './track';
 
 export class LapTracker {
   nextGate = 0;
-  valid = true;
   laps: number[] = [];
   lapStartMs = 0;
   recovery = { ...START };
   update(a: Point, b: Point, timeMs: number): void {
     if (this.finished) return;
-    // Called each physics step, not just at checkpoints: shortcuts invalidate a lap.
-    if (!onRoad(a) || !onRoad(b)) this.valid = false;
+    // Street-racing rules: surface affects grip and speed, not lap eligibility.
+    // Ordered directional gates still define a complete lap.
     if (!crossedGate(a, b, GATES[this.nextGate])) return;
     this.recovery = { ...GATES[this.nextGate].spawn };
     this.nextGate++;
     if (this.nextGate === GATES.length) {
-      if (this.valid) this.laps.push(timeMs - this.lapStartMs);
+      this.laps.push(timeMs - this.lapStartMs);
       this.lapStartMs = timeMs;
-      this.valid = true;
       this.nextGate = 0;
     }
   }
@@ -62,7 +60,6 @@ export class Race {
     this.previous = { x: this.x, y: this.y };
     this.speed = this.vx = this.vy = 0;
     this.drifting = false;
-    this.tracker.valid = false;
     this.accumulator = 0;
   }
   advance(deltaMs: number, input: Controls): void {
@@ -125,7 +122,7 @@ export function formatTime(ms: number): string {
   const value = Math.max(0, Math.floor(ms));
   return `${Math.floor(value / 60000)}:${String(Math.floor(value / 1000) % 60).padStart(2, '0')}.${String(value % 1000).padStart(3, '0')}`;
 }
-export const RECORD_KEY = `corrida-sp:${TRACK_ID}:three-laps`;
+export const RECORD_KEY = `corrida-sp:${TRACK_ID}:street-v1:three-laps`;
 export function loadRecord(storage: Pick<Storage, 'getItem'>): number | null {
   try {
     const raw = storage.getItem(RECORD_KEY);
